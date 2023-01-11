@@ -131,6 +131,7 @@ export abstract class NodeUtils extends UtilParser {
           " Instead use resetEndLocation() or change type directly.",
       );
     }
+
     // @ts-expect-error migrate to Babel types AST typings
     node.type = type;
     // @ts-expect-error migrate to Babel types AST typings

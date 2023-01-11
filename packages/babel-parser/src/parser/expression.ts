@@ -1083,6 +1083,24 @@ export default abstract class ExpressionParser extends LValParser {
     return this.parseSubscripts(this.parseExprAtom(), startLoc, true);
   }
 
+  getStringNode(str:string): N.StringLiteral
+  {
+    const node = this.startNode();
+    node.type = 'StringLiteral';
+    node.value = str;    
+    return node;
+  }
+
+	getChar(offset:number=0): String
+	{
+		return this.input[this.state.start + offset];
+	}
+
+	getCharCode(offset:number=0): number
+	{
+		return this.input.charCodeAt(this.state.start + offset);
+	}
+
   // Parse an atomic expression — either a single token that is an
   // expression, an expression started by a keyword like `function` or
   // `new`, or an expression wrapped in punctuation like `()`, `[]`,
@@ -1101,6 +1119,11 @@ export default abstract class ExpressionParser extends LValParser {
   ): N.Expression {
     let node;
     let decorators: N.Decorator[] | null = null;
+
+    if (this.getChar() === '@' && this.getChar(1) === '(')
+    {
+      return this.parseUnoTag();
+    }
 
     const { type } = this.state;
     switch (type) {

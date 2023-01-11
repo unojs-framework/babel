@@ -386,6 +386,88 @@ export default abstract class StatementParser extends ExpressionParser {
     return this.parseStatementLike(ParseStatementFlag.StatementOnly);
   }
 
+  parseUnoTag(this: Parser): N.CallExpression
+  {
+    const node = this.startNode();
+
+    // skip @(
+    this.next();
+    this.next();
+
+    let componentOrType:any = this.parseIdentifier();
+    let c;
+
+    if (/[a-z]/.test(componentOrType.name[0]))
+    {
+      componentOrType = this.getStringNode(componentOrType.name);
+    }
+
+    node.arguments = [ componentOrType ];
+    node.callee = this.createIdentifier(this.startNode<N.Identifier>(), '$');
+    
+    const paramsNode:N.ObjectExpression = this.startNode<N.ObjectExpression>();   
+    paramsNode.type = 'ObjectExpression';   
+    paramsNode.properties = [];
+
+    while ((c = this.getChar()) !== ')')
+    {
+      let key = this.parseIdentifier();
+
+      if (this.getChar() !== '=')
+      {
+        throw 'Expecting =';
+      }
+
+      this.next();
+
+      let param:N.ObjectProperty = this.startNode<N.ObjectProperty>();
+      param.type = 'ObjectProperty';
+      param.key = key;
+      param.value = this.parseExpression()
+      paramsNode.properties.push(param);
+    }
+
+    this.next();
+    
+
+    if (paramsNode.properties.length)
+    {
+      node.arguments.push(paramsNode);
+    }
+
+    if (this.getChar() === '{')
+    {
+      const cbNode: N.ArrowFunctionExpression = this.startNode<N.ArrowFunctionExpression>();
+      cbNode.type = 'ArrowFunctionExpression';
+      cbNode.params = [
+        this.createIdentifier(this.startNode<N.Identifier>(), '$')
+      ];
+      this.initFunction(cbNode, false);
+
+      const oldMaybeInArrowParameters = this.state.maybeInArrowParameters;
+      this.state.maybeInArrowParameters = false;
+      this.scope.enter(SCOPE_FUNCTION);
+      this.prodParam.enter(functionFlags(false, node.generator));
+
+      this.withSmartMixTopicForbiddingContext(() => {
+        // Parse the function body.
+        this.parseFunctionBodyAndFinish(
+          cbNode,
+          "ArrowFunctionExpression",
+        );
+      });
+
+      this.prodParam.exit();
+      this.scope.exit();
+
+      this.state.maybeInArrowParameters = oldMaybeInArrowParameters;
+      
+      node.arguments.push(cbNode);
+    }
+
+    return this.finishNodeAt(node, 'CallExpression', this.state.lastTokEndLoc);
+  }
+
   // ImportDeclaration and ExportDeclaration are also handled here so we can throw recoverable errors
   // when they are not at the top level
   parseStatementLike(
@@ -399,6 +481,11 @@ export default abstract class StatementParser extends ExpressionParser {
     | N.ExportNamedDeclaration
     | N.ExportAllDeclaration {
     let decorators: N.Decorator[] | null = null;
+
+    if (this.getChar() === '@' && this.getChar(1) === '(')
+    {
+      return this.parseUnoTag();
+    }
 
     if (this.match(tt.at)) {
       decorators = this.parseDecorators(true);
